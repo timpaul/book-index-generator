@@ -433,11 +433,42 @@ const BookIndexGenerator = () => {
     );
   };
 
-  const renderPage = () => {
+const renderPage = () => {
     const book = books[currentBookId];
     if (!book || !selectedPage) return null;
 
     const pageTopics = book.pages[selectedPage] || [];
+    const allPageNumbers = Object.keys(book.pages).map(Number).sort((a, b) => a - b);
+    const currentPageIndex = allPageNumbers.indexOf(selectedPage);
+    const previousPage = currentPageIndex > 0 ? allPageNumbers[currentPageIndex - 1] : null;
+    const nextPage = currentPageIndex < allPageNumbers.length - 1 ? allPageNumbers[currentPageIndex + 1] : null;
+
+    const PageNavigation = ({ position }) => (
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          {previousPage && (
+            <button
+              onClick={() => setSelectedPage(previousPage)}
+              className="text-blue-500 hover:text-blue-700 flex items-center gap-1"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" />
+              Previous page ({previousPage})
+            </button>
+          )}
+        </div>
+        <div>
+          {nextPage && (
+            <button
+              onClick={() => setSelectedPage(nextPage)}
+              className="text-blue-500 hover:text-blue-700 flex items-center gap-1"
+            >
+              Next page ({nextPage})
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
 
     return (
       <div className="p-4">
@@ -464,6 +495,8 @@ const BookIndexGenerator = () => {
             Topics on Page {selectedPage}
           </h2>
           
+          <PageNavigation position="top" />
+          
           {pageTopics.length === 0 ? (
             <p className="text-gray-500 text-center">No topics found for this page.</p>
           ) : (
@@ -486,7 +519,8 @@ const BookIndexGenerator = () => {
           )}
           
           <div className="mt-6 pt-4 border-t">
-            <p className="text-sm text-gray-600 text-center">
+            <PageNavigation position="bottom" />
+            <p className="text-sm text-gray-600 text-center mt-4">
               Click Wikipedia links to explore these topics in depth
             </p>
           </div>
@@ -494,7 +528,6 @@ const BookIndexGenerator = () => {
       </div>
     );
   };
-
   return (
     <div className="min-h-screen bg-gray-50">
       {view === 'home' && renderHome()}
@@ -505,3 +538,9 @@ const BookIndexGenerator = () => {
 };
 
 export default BookIndexGenerator;
+
+
+
+
+
+
