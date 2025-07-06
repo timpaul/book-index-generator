@@ -468,7 +468,7 @@ const BookIndexGenerator = () => {
             <p className="text-gray-500 text-center">No topics found for this page.</p>
           ) : (
             <div className="space-y-3">
-              {pageTopics.sort().map(topic => (
+              {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
                 <div key={topic} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                   <span className="font-medium">{topic}</span>
                   <a
