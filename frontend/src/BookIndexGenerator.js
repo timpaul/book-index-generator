@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, Book, Plus, Eye, Trash2, Upload, FileText, ExternalLink, Search, ChevronRight, Home } from 'lucide-react';
 
 const BookIndexGenerator = () => {
@@ -14,6 +14,64 @@ const BookIndexGenerator = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [newBookName, setNewBookName] = useState('');
   const [showNewBookForm, setShowNewBookForm] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Local storage keys
+  const STORAGE_KEY = 'book-index-generator-books';
+  const CURRENT_BOOK_KEY = 'book-index-generator-current-book';
+
+  // Load data from local storage on component mount
+  useEffect(() => {
+    try {
+      const savedBooks = localStorage.getItem(STORAGE_KEY);
+      const savedCurrentBook = localStorage.getItem(CURRENT_BOOK_KEY);
+      
+      if (savedBooks) {
+        const parsedBooks = JSON.parse(savedBooks);
+        setBooks(parsedBooks);
+      }
+      
+      if (savedCurrentBook && savedBooks) {
+        const parsedBooks = JSON.parse(savedBooks);
+        // Only set current book if it still exists
+        if (parsedBooks[savedCurrentBook]) {
+          setCurrentBookId(savedCurrentBook);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data from localStorage:', error);
+      // If there's an error, start fresh
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(CURRENT_BOOK_KEY);
+    } finally {
+      // Mark initial load as complete
+      setIsInitialLoad(false);
+    }
+  }, []);
+
+  // Save books to local storage whenever books state changes (but not on initial load)
+  useEffect(() => {
+    if (isInitialLoad) return; // Don't save during initial load
+    
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
+    } catch (error) {
+      console.error('Error saving books to localStorage:', error);
+    }
+  }, [books, isInitialLoad]);
+
+  // Save current book ID to local storage whenever it changes
+  useEffect(() => {
+    try {
+      if (currentBookId) {
+        localStorage.setItem(CURRENT_BOOK_KEY, currentBookId);
+      } else {
+        localStorage.removeItem(CURRENT_BOOK_KEY);
+      }
+    } catch (error) {
+      console.error('Error saving current book to localStorage:', error);
+    }
+  }, [currentBookId]);
 
   // Updated OCR function to use backend API
   const claudeOCR = async (imageData) => {
@@ -279,6 +337,9 @@ const BookIndexGenerator = () => {
             <p className="text-gray-600 text-sm mb-2">
               {book.photosProcessed} photos processed
             </p>
+            <p className="text-gray-600 text-sm mb-2">
+              Created: {new Date(book.createdAt).toLocaleDateString()}
+            </p>
             <p className="text-gray-600 text-sm mb-3">
               {Object.keys(book.entries).length} index terms • {Object.keys(book.pages).length} pages
             </p>
@@ -528,6 +589,7 @@ const renderPage = () => {
       </div>
     );
   };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {view === 'home' && renderHome()}
@@ -538,9 +600,3 @@ const renderPage = () => {
 };
 
 export default BookIndexGenerator;
-
-
-
-
-
-
