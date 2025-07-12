@@ -15,6 +15,9 @@ const BookIndexGenerator = () => {
   const [newBookName, setNewBookName] = useState('');
   const [showNewBookForm, setShowNewBookForm] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [importingBook, setImportingBook] = useState(null);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const importFileRef = useRef();
 
   // Local storage keys
   const STORAGE_KEY = 'book-index-generator-books';
@@ -146,6 +149,109 @@ const BookIndexGenerator = () => {
     setNewBookName('');
     setShowNewBookForm(false);
     setView('book');
+  };
+
+  const exportBook = (bookId) => {
+    const book = books[bookId];
+    if (!book) return;
+    
+    const bookData = {
+      [bookId]: book
+    };
+    
+    const dataStr = JSON.stringify(bookData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${book.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_export.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        
+        // Validate the imported data structure
+        if (typeof importedData !== 'object' || importedData === null) {
+          throw new Error('Invalid file format');
+        }
+        
+        // Get the first (and presumably only) book from the imported data
+        const bookIds = Object.keys(importedData);
+        if (bookIds.length === 0) {
+          throw new Error('No book data found in file');
+        }
+        
+        const bookId = bookIds[0];
+        const bookData = importedData[bookId];
+        
+        // Validate book data structure
+        if (!bookData || typeof bookData !== 'object' || !bookData.id || !bookData.name) {
+          throw new Error('Invalid book data structure');
+        }
+        
+        // Check if book with same ID already exists
+        if (books[bookId]) {
+          setImportingBook({ bookId, bookData });
+          setShowImportConfirm(true);
+        } else {
+          // Import the book directly
+          importBook(bookId, bookData);
+        }
+      } catch (error) {
+        console.error('Import error:', error);
+        alert(`Failed to import book: ${error.message}`);
+      }
+    };
+    
+    reader.readAsText(file);
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const importBook = (bookId, bookData) => {
+    setBooks(prev => ({
+      ...prev,
+      [bookId]: {
+        ...bookData,
+        // Ensure required fields exist
+        entries: bookData.entries || {},
+        pages: bookData.pages || {},
+        photosProcessed: bookData.photosProcessed || 0,
+        createdAt: bookData.createdAt || new Date().toISOString()
+      }
+    }));
+    
+    // Set as current book and navigate to it
+    setCurrentBookId(bookId);
+    setView('book');
+    setShowNewBookForm(false);
+    setNewBookName('');
+    
+    alert(`Book "${bookData.name}" imported successfully!`);
+  };
+
+  const confirmImport = () => {
+    if (importingBook) {
+      importBook(importingBook.bookId, importingBook.bookData);
+    }
+    setShowImportConfirm(false);
+    setImportingBook(null);
+  };
+
+  const cancelImport = () => {
+    setShowImportConfirm(false);
+    setImportingBook(null);
   };
 
   const processImageData = async (imageData) => {
@@ -302,7 +408,7 @@ const BookIndexGenerator = () => {
             onChange={(e) => setNewBookName(e.target.value)}
             className="w-full p-2 border rounded mb-3"
           />
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-4">
             <button
               onClick={createBook}
               className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
@@ -318,6 +424,55 @@ const BookIndexGenerator = () => {
             >
               Cancel
             </button>
+          </div>
+          
+          <div className="border-t pt-4">
+            <h4 className="font-semibold mb-2">Or Import Book</h4>
+            <button
+              onClick={() => importFileRef.current?.click()}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Import from JSON file
+            </button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".json"
+              onChange={handleImportFile}
+              style={{ display: 'none' }}
+            />
+            <p className="text-sm text-gray-600 mt-2">
+              Select a JSON file exported from this app
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showImportConfirm && importingBook && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="font-semibold text-lg mb-4">Book Already Exists</h3>
+            <p className="text-gray-600 mb-4">
+              A book with the same ID already exists: <strong>"{books[importingBook.bookId]?.name}"</strong>
+            </p>
+            <p className="text-gray-600 mb-6">
+              Do you want to replace it with the imported book: <strong>"{importingBook.bookData.name}"</strong>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmImport}
+                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+              >
+                Replace Existing Book
+              </button>
+              <button
+                onClick={cancelImport}
+                className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+              >
+                Cancel Import
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -463,7 +618,7 @@ const BookIndexGenerator = () => {
         </div>
 
         {Object.keys(book.pages).length > 0 && (
-          <div className="bg-white p-4 rounded-lg border">
+          <div className="bg-white p-4 rounded-lg border mb-6">
             <h2 className="font-semibold mb-3 flex items-center gap-2">
               <FileText className="w-5 h-5" />
               Generated Pages ({Object.keys(book.pages).length})
@@ -490,6 +645,23 @@ const BookIndexGenerator = () => {
             </div>
           </div>
         )}
+
+        <div className="bg-white p-4 rounded-lg border">
+          <h2 className="font-semibold mb-3 flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Export Book
+          </h2>
+          <p className="text-gray-600 text-sm mb-3">
+            Export this book's data as a JSON file to share or backup your index data.
+          </p>
+          <button
+            onClick={() => exportBook(currentBookId)}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2"
+          >
+            <FileText className="w-4 h-4" />
+            Export Book Data
+          </button>
+        </div>
       </div>
     );
   };
