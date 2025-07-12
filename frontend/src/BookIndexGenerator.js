@@ -17,6 +17,8 @@ const BookIndexGenerator = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [importingBook, setImportingBook] = useState(null);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+
   const importFileRef = useRef();
 
   // Local storage keys
@@ -75,6 +77,12 @@ const BookIndexGenerator = () => {
       console.error('Error saving current book to localStorage:', error);
     }
   }, [currentBookId]);
+
+  useEffect(() => {
+    if (view === 'page') {
+      window.scrollTo(0, 0);
+    }
+  }, [view, selectedPage]);
 
   // Updated OCR function to use backend API
   const claudeOCR = async (imageData) => {
@@ -319,43 +327,200 @@ const BookIndexGenerator = () => {
     }
   };
 
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      videoRef.current.srcObject = stream;
-      setCameraActive(true);
-    } catch (error) {
-      console.error('Camera access error:', error);
-      alert('Camera access denied or not available');
+const startCamera = async () => {
+  try {
+    // Check if we're on HTTPS or localhost
+    const isSecureContext = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+    if (!isSecureContext) {
+      throw new Error('Camera access requires HTTPS or localhost');
     }
-  };
 
-  const stopCamera = () => {
+    // Check if mediaDevices is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Camera API not supported in this browser');
+    }
+
+    setCameraLoading(true);
+    setProcessingStatus('Requesting camera permission...');
+    
+    // Request camera permission with fallback constraints
+    let stream;
+    try {
+      // Try with environment camera first (back camera on mobile)
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
+    } catch (envCameraError) {
+      console.log('Environment camera failed, trying default camera:', envCameraError);
+      // Fallback to any available camera
+      stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
+    }
+
+    // Set camera active to render the video element
+    setCameraActive(true);
+    
+    // Wait for the video element to be rendered
+    await new Promise((resolve) => {
+      const checkVideoElement = () => {
+        if (videoRef.current) {
+          resolve();
+        } else {
+          // Keep checking until video element is available
+          setTimeout(checkVideoElement, 50);
+        }
+      };
+      checkVideoElement();
+    });
+
+    // Now set up video stream
+    videoRef.current.srcObject = stream;
+    
+    // Wait for video to be ready
+    await new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Video failed to load within 10 seconds'));
+      }, 10000);
+
+      videoRef.current.onloadedmetadata = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+      
+      videoRef.current.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Video element error'));
+      };
+    });
+
+    setProcessingStatus('Camera ready!');
+    setTimeout(() => setProcessingStatus(''), 2000);
+    
+  } catch (error) {
+    console.error('Camera access error:', error);
+    
+    // Clean up on error
+    setCameraActive(false);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Camera access failed: ';
+    
+    if (error.name === 'NotAllowedError') {
+      errorMessage += 'Camera permission was denied. Please allow camera access and try again.';
+    } else if (error.name === 'NotFoundError') {
+      errorMessage += 'No camera found on this device.';
+    } else if (error.name === 'NotSupportedError') {
+      errorMessage += 'Camera is not supported on this device.';
+    } else if (error.name === 'NotReadableError') {
+      errorMessage += 'Camera is being used by another application.';
+    } else if (error.message.includes('HTTPS')) {
+      errorMessage += 'Camera requires HTTPS connection. Please use HTTPS or localhost.';
+    } else {
+      errorMessage += error.message;
+    }
+    
+    setProcessingStatus(`Error: ${errorMessage}`);
+    setTimeout(() => setProcessingStatus(''), 8000);
+  } finally {
+    setCameraLoading(false);
+  }
+};
+
+// Updated stopCamera function
+const stopCamera = () => {
+  try {
     if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      const stream = videoRef.current.srcObject;
+      const tracks = stream.getTracks();
+      tracks.forEach(track => {
+        track.stop();
+        console.log('Camera track stopped:', track.kind);
+      });
+      videoRef.current.srcObject = null;
     }
     setCameraActive(false);
-  };
+    setCameraLoading(false);
+    setProcessingStatus('');
+  } catch (error) {
+    console.error('Error stopping camera:', error);
+  }
+};
 
-  const capturePhoto = () => {
+// Enhanced capturePhoto function with better error handling
+const capturePhoto = () => {
+  try {
     const canvas = canvasRef.current;
     const video = videoRef.current;
+    
+    if (!canvas || !video) {
+      throw new Error('Canvas or video element not available');
+    }
+    
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      throw new Error('Video not ready - no video dimensions');
+    }
+    
     const context = canvas.getContext('2d');
     
+    // Set canvas dimensions to match video
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    
+    // Draw the video frame to canvas
     context.drawImage(video, 0, 0);
     
-    canvas.toBlob(blob => {
-      const reader = new FileReader();
-      reader.onload = (e) => processImageData(e.target.result);
-      reader.readAsDataURL(blob);
-    });
+    // Convert to blob and process
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          throw new Error('Failed to capture image');
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          processImageData(e.target.result);
+        };
+        reader.onerror = () => {
+          setProcessingStatus('Error: Failed to process captured image');
+          setTimeout(() => setProcessingStatus(''), 5000);
+        };
+        reader.readAsDataURL(blob);
+      },
+      'image/jpeg',
+      0.8 // Quality setting
+    );
     
     stopCamera();
-  };
+    
+  } catch (error) {
+    console.error('Photo capture error:', error);
+    setProcessingStatus(`Error capturing photo: ${error.message}`);
+    setTimeout(() => setProcessingStatus(''), 5000);
+  }
+};
+
+// Optional: Add a function to check camera permissions
+const checkCameraPermission = async () => {
+  try {
+    if (!navigator.permissions) {
+      return 'unknown';
+    }
+    
+    const result = await navigator.permissions.query({ name: 'camera' });
+    return result.state; // 'granted', 'denied', or 'prompt'
+  } catch (error) {
+    console.error('Permission check error:', error);
+    return 'unknown';
+  }
+};
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -387,7 +552,7 @@ const BookIndexGenerator = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
           <Book className="w-6 h-6" />
-          Book Index Generator
+          Booky
         </h1>
         <button
           onClick={() => setShowNewBookForm(true)}
@@ -479,7 +644,7 @@ const BookIndexGenerator = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {Object.values(books).map(book => (
-          <div key={book.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+          <div key={book.id} className="bg-white p-4 -lg border border-gray-200 shadow-sm">
             <div className="flex justify-between items-start mb-2">
               <h3 className="font-semibold text-lg">{book.name}</h3>
               <button
@@ -490,13 +655,10 @@ const BookIndexGenerator = () => {
               </button>
             </div>
             <p className="text-gray-600 text-sm mb-2">
-              {book.photosProcessed} photos processed
-            </p>
-            <p className="text-gray-600 text-sm mb-2">
-              Created: {new Date(book.createdAt).toLocaleDateString()}
+              Created on {new Date(book.createdAt).toLocaleDateString()}
             </p>
             <p className="text-gray-600 text-sm mb-3">
-              {Object.keys(book.entries).length} index terms • {Object.keys(book.pages).length} pages
+              {Object.keys(book.entries).length} terms in {Object.keys(book.pages).length} pages from {book.photosProcessed} photos
             </p>
             <button
               onClick={() => {
@@ -527,8 +689,8 @@ const BookIndexGenerator = () => {
     if (!book) return null;
 
     return (
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-4">
+      <div className="">
+        <div className="flex items-center gap-2 mb-1 p-4">
           <button
             onClick={() => setView('home')}
             className="text-blue-500 hover:text-blue-700"
@@ -539,20 +701,25 @@ const BookIndexGenerator = () => {
           <h1 className="text-xl font-bold">{book.name}</h1>
         </div>
 
-        <div className="bg-white p-4 rounded-lg border mb-6">
+        <div className="bg-white p-4 border-t border-b mb-6">
           <h2 className="font-semibold mb-3 flex items-center gap-2">
             <Camera className="w-5 h-5" />
-            Add Index Photos
+            Add index photos
           </h2>
+
+
+          <p className="text-gray-600 text-sm mb-4">
+            {Object.keys(book.entries).length} terms in {Object.keys(book.pages).length} pages from {book.photosProcessed} photos
+          </p>
           
           {processing && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200">
               <p className="text-blue-700">{processingStatus}</p>
             </div>
           )}
 
           {processingStatus && !processing && processingStatus.includes('Error') && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200">
               <p className="text-red-700">{processingStatus}</p>
             </div>
           )}
@@ -560,40 +727,49 @@ const BookIndexGenerator = () => {
           <div className="flex gap-2 mb-4">
             <button
               onClick={startCamera}
-              disabled={processing || cameraActive}
+              disabled={processing || cameraActive || cameraLoading}
               className="bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-600 disabled:opacity-50"
             >
               <Camera className="w-4 h-4" />
-              Take Photo
+              {cameraLoading ? 'Starting Camera...' : 'Take Photo'}
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={processing}
-              className="bg-blue-500 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-600 disabled:opacity-50"
+              className="bg-blue-500 text-white px-4 py-2 flex items-center rounded gap-2 hover:bg-blue-600 disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
-              Upload Photo
+              Upload Photos
             </button>
           </div>
 
-          {cameraActive && (
+          {(cameraActive || cameraLoading) && (
             <div className="mb-4">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="w-full max-w-md border rounded"
-              />
+              {cameraLoading && (
+                <div className="w-full max-w-md border bg-gray-100 flex items-center justify-center h-48">
+                  <p className="text-gray-600">Starting camera...</p>
+                </div>
+              )}
+              {cameraActive && (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full max-w-md border"
+                />
+              )}
               <div className="flex gap-2 mt-2">
-                <button
-                  onClick={capturePhoto}
-                  className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-                >
-                  Capture
-                </button>
+                {cameraActive && (
+                  <button
+                    onClick={capturePhoto}
+                    className="bg-green-500 text-white px-4 py-2 hover:bg-green-600"
+                  >
+                    Capture
+                  </button>
+                )}
                 <button
                   onClick={stopCamera}
-                  className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                  className="bg-gray-500 text-white px-4 py-2 hover:bg-gray-600"
                 >
                   Cancel
                 </button>
@@ -610,20 +786,15 @@ const BookIndexGenerator = () => {
             style={{ display: 'none' }}
           />
 
-          <p className="text-sm text-gray-600">
-            Photos processed: {book.photosProcessed} • 
-            Index terms found: {Object.keys(book.entries).length} • 
-            Pages with content: {Object.keys(book.pages).length}
-          </p>
         </div>
 
         {Object.keys(book.pages).length > 0 && (
-          <div className="bg-white p-4 rounded-lg border mb-6">
-            <h2 className="font-semibold mb-3 flex items-center gap-2">
+          <div className="border-b mb-6">
+            <h2 className="font-semibold m-4 flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Generated Pages ({Object.keys(book.pages).length})
+              Pages ({Object.keys(book.pages).length})
             </h2>
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="bg-white grid border-t md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Object.keys(book.pages)
                 .map(Number)
                 .sort((a, b) => a - b)
@@ -634,11 +805,13 @@ const BookIndexGenerator = () => {
                       setSelectedPage(pageNum);
                       setView('page');
                     }}
-                    className="p-3 border rounded-lg hover:bg-blue-50 text-left"
+                    className="p-4 border-b hover:bg-blue-50 text-left"
                   >
-                    <div className="font-semibold">Page {pageNum}</div>
-                    <div className="text-sm text-gray-600">
-                      {book.pages[pageNum].length} topics
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Page {pageNum}</span>
+                      <span className="text-sm text-gray-600">
+                        {book.pages[pageNum].length} topics
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -666,6 +839,7 @@ const BookIndexGenerator = () => {
     );
   };
 
+// Option 1: Move PageNavigation outside the content area and make it fixed
 const renderPage = () => {
     const book = books[currentBookId];
     if (!book || !selectedPage) return null;
@@ -676,89 +850,90 @@ const renderPage = () => {
     const previousPage = currentPageIndex > 0 ? allPageNumbers[currentPageIndex - 1] : null;
     const nextPage = currentPageIndex < allPageNumbers.length - 1 ? allPageNumbers[currentPageIndex + 1] : null;
 
-    const PageNavigation = ({ position }) => (
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          {previousPage && (
-            <button
-              onClick={() => setSelectedPage(previousPage)}
-              className="text-blue-500 hover:text-blue-700 flex items-center gap-1"
-            >
-              <ChevronRight className="w-4 h-4 rotate-180" />
-              Previous page ({previousPage})
-            </button>
-          )}
-        </div>
-        <div>
-          {nextPage && (
-            <button
-              onClick={() => setSelectedPage(nextPage)}
-              className="text-blue-500 hover:text-blue-700 flex items-center gap-1"
-            >
-              Next page ({nextPage})
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
+    const PageNavigation = () => (
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+        <div className="flex justify-between items-center py-3 max-w-4xl mx-auto">
+          <div>
+            {previousPage && (
+              <button
+                onClick={() => setSelectedPage(previousPage)}
+                className="text-blue-500 font-bold hover:text-blue-700 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-blue-50"
+              >
+                <ChevronRight className="w-4 h-4 rotate-180" />
+                Prev
+              </button>
+            )}
+          </div>
+          <div className="text-sm text-gray-600 font-medium">
+            Page {selectedPage} of {allPageNumbers.length}
+          </div>
+          <div>
+            {nextPage && (
+              <button
+                onClick={() => setSelectedPage(nextPage)}
+                className="text-blue-500 font-bold hover:text-blue-700 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-blue-50"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
 
     return (
-      <div className="p-4">
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            onClick={() => setView('home')}
-            className="text-blue-500 hover:text-blue-700"
-          >
-            <Home className="w-4 h-4" />
-          </button>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-          <button
-            onClick={() => setView('book')}
-            className="text-blue-500 hover:text-blue-700"
-          >
-            {book.name}
-          </button>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-          <h1 className="text-xl font-bold">Page {selectedPage}</h1>
-        </div>
+      <>
+        <div className="pb-20"> {/* Add bottom padding to prevent content from being hidden behind fixed nav */}
+          <div className="flex items-center gap-2 p-4 mb-1">
+            <button
+              onClick={() => setView('home')}
+              className="text-blue-500 hover:text-blue-700"
+            >
+              <Home className="w-4 h-4" />
+            </button>
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+            <button
+              onClick={() => setView('book')}
+              className="text-blue-500 hover:text-blue-700"
+            >
+              {book.name}
+            </button>
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+            <h1 className="text-l font-bold">Page {selectedPage}</h1>
+          </div>
 
-        <div className="bg-white p-6 rounded-lg border">
-          <h2 className="text-2xl font-bold mb-6 text-center">
-            Topics on Page {selectedPage}
-          </h2>
-          
-          <PageNavigation position="top" />
-          
-          {pageTopics.length === 0 ? (
-            <p className="text-gray-500 text-center">No topics found for this page.</p>
-          ) : (
-            <div className="space-y-3">
-              {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
-                <div key={topic} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                  <span className="font-medium">{topic}</span>
+          <div className="bg-white border-t border-b">
+            {pageTopics.length === 0 ? (
+              <p className="text-gray-500 text-center p-8">No topics found for this page.</p>
+            ) : (
+              <div>
+
+
+
+                {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
                   <a
+                    key={topic}
                     href={generateWikipediaUrl(topic)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 flex items-center gap-1"
+                    className="block p-4 border-b hover:bg-blue-50 transition-colors"
                   >
-                    <ExternalLink className="w-3 h-3" />
-                    Wikipedia
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-800 hover:text-gray-900">{topic}</span>
+                      <div className="bg-blue-500 rounded-full p-1 flex items-center justify-center w-6 h-6">
+                        <ChevronRight className="w-3 h-3 text-white" />
+                      </div>
+                    </div>
                   </a>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          <div className="mt-6 pt-4 border-t">
-            <PageNavigation position="bottom" />
-            <p className="text-sm text-gray-600 text-center mt-4">
-              Click Wikipedia links to explore these topics in depth
-            </p>
+                ))}
+
+              </div>
+            )}
           </div>
         </div>
-      </div>
+        
+        {/* Fixed navigation at bottom */}
+        <PageNavigation />
+      </>
     );
   };
 
