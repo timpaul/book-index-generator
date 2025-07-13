@@ -171,6 +171,7 @@ useEffect(() => {
         name: bookName,
         entries: {},
         pages: {},
+        notes: {},
         createdAt: new Date().toISOString(),
         photosProcessed: 0
       }
@@ -258,6 +259,7 @@ useEffect(() => {
         // Ensure required fields exist
         entries: bookData.entries || {},
         pages: bookData.pages || {},
+        notes: bookData.notes || {},
         photosProcessed: bookData.photosProcessed || 0,
         createdAt: bookData.createdAt || new Date().toISOString()
       }
@@ -954,14 +956,13 @@ const renderPage = () => {
 
   const TopicsTab = () => (
     <div className="bg-white border-t border-b">
-
+          <p className="p-4 text-center text-gray-500 bg-gray-50">Wikipedia topics on Page {selectedPage}</p>
           {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
             <a
               key={topic}
               href={generateWikipediaUrl(topic)}
-              target="_blank"
               rel="noopener noreferrer"
-              className="block p-4 border-b hover:bg-blue-50 transition-colors"
+              className="block p-4 border-t hover:bg-blue-50 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-gray-800 hover:text-gray-900">{topic}</span>
@@ -974,13 +975,62 @@ const renderPage = () => {
     </div>
   );
 
-  const NotesTab = () => (
-    <div className="bg-white border-t border-b min-h-64">
-      <div className="p-8 text-center text-gray-500">
-        <p>Notes feature coming soon...</p>
+const NotesTab = () => {
+  const [localNotes, setLocalNotes] = useState(book.notes?.[selectedPage] || '');
+  const timeoutRef = useRef(null);
+  
+  // Update local state when page changes
+  useEffect(() => {
+    setLocalNotes(book.notes?.[selectedPage] || '');
+  }, [selectedPage, book.notes]);
+  
+  const handleNotesChange = (e) => {
+    const newNotes = e.target.value;
+    setLocalNotes(newNotes); // Update local state immediately for responsive typing
+    
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    // Set new timeout to save after user stops typing
+    timeoutRef.current = setTimeout(() => {
+      setBooks(prev => ({
+        ...prev,
+        [currentBookId]: {
+          ...prev[currentBookId],
+          notes: {
+            ...prev[currentBookId].notes,
+            [selectedPage]: newNotes
+          }
+        }
+      }));
+    }, 5000); // Save 5000ms after user stops typing
+  };
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="bg-white border-b min-h-64">
+      <div className="p-4">
+        <textarea
+          value={localNotes}
+          onChange={handleNotesChange}
+          placeholder="Enter your notes for this page..."
+          className="w-full h-64 p-3 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          style={{ whiteSpace: 'pre-wrap' }}
+        />
       </div>
     </div>
   );
+};
 
   const GalleryTab = () => (
     <div className="bg-white border-t border-b min-h-64">
