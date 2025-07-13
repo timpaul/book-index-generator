@@ -695,10 +695,12 @@ const renderBook = () => {
     
     const query = searchQuery.toLowerCase().trim();
     
-    // Check if page number matches
-    if (pageNum.includes(query)) return true;
+    // Check if query is a number - if so, do exact page number matching
+    if (/^\d+$/.test(query)) {
+      return pageNum === query;
+    }
     
-    // Check if any topic on this page matches
+    // For non-numeric queries, check if any topic on this page matches
     const pageTopics = book.pages[pageNum] || [];
     return pageTopics.some(topic => 
       topic.toLowerCase().includes(query)
