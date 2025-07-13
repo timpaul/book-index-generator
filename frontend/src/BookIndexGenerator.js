@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, Book, Plus, Eye, Trash2, Upload, FileText, ExternalLink, Search, ChevronRight, Home } from 'lucide-react';
+import { Camera, Book, Plus, Eye, Trash2, Upload, FileText, ExternalLink, Search, ChevronRight, ArrowRight, Home } from 'lucide-react';
 
 const BookIndexGenerator = () => {
   const [books, setBooks] = useState({});
@@ -741,7 +741,7 @@ const renderBook = () => {
           <Home className="w-4 h-4" />
         </button>
         <ChevronRight className="w-4 h-4 text-gray-400" />
-        <h1 className="text-xl font-bold">{book.name}</h1>
+        <h1 className="text-l font-bold">{book.name}</h1>
       </div>
 
  
@@ -955,23 +955,23 @@ const renderPage = () => {
   );
 
   const TopicsTab = () => (
-    <div className="bg-white border-t border-b">
-          <p className="p-4 text-center text-gray-500 bg-gray-50">Wikipedia topics on Page {selectedPage}</p>
+    <div className="bg-white">
           {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
             <a
               key={topic}
               href={generateWikipediaUrl(topic)}
               rel="noopener noreferrer"
-              className="block p-4 border-t hover:bg-blue-50 transition-colors"
+              className="block p-4 border-b transition-colors"
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-gray-800 hover:text-gray-900">{topic}</span>
-                <div className="bg-blue-500 rounded-full p-1 flex items-center justify-center w-6 h-6">
-                  <ChevronRight className="w-3 h-3 text-white" />
+                <div className="bg-blue-500 rounded-full p-1 flex items-center justify-center w-6 h-6">            
+                  <ArrowRight className="w-10 h-10 text-white" />
                 </div>
               </div>
             </a>
           ))}
+          <p className="pt-4 text-sm text-center text-gray-500 bg-gray-50">Topics link to Wikipedia</p>
     </div>
   );
 
@@ -1033,7 +1033,7 @@ const NotesTab = () => {
 };
 
   const GalleryTab = () => (
-    <div className="bg-white border-t border-b min-h-64">
+    <div className="bg-white border-b min-h-64">
       <div className="p-8 text-center text-gray-500">
         <p>Gallery feature coming soon...</p>
       </div>
@@ -1063,34 +1063,34 @@ const NotesTab = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white border-b">
+        <div className="bg-white sticky top-0 z-40 border-b">
           <div className="flex">
             <button
               onClick={() => setActiveTab('topics')}
-              className={`flex-1 py-3 font-medium border-b-2 transition-colors ${
+              className={`flex-1 py-3 font-medium border border-b-2 transition-colors ${
                 activeTab === 'topics'
-                  ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700'
+                  ? 'text-blue-600 border-b-blue-600'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 bg-gray-50'
               }`}
             >
               Topics
             </button>
             <button
               onClick={() => setActiveTab('notes')}
-              className={`flex-1 py-3 font-medium border-b-2 transition-colors ${
+              className={`flex-1 py-3 font-medium border border-b-2 transition-colors ${
                 activeTab === 'notes'
-                  ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700'
+                  ? 'text-blue-600 border-b-blue-600'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 bg-gray-50'
               }`}
             >
               Notes
             </button>
             <button
               onClick={() => setActiveTab('gallery')}
-              className={`flex-1 py-3 font-medium border-b-2 transition-colors ${
+              className={`flex-1 py-3 font-medium border border-b-2 transition-colors ${
                 activeTab === 'gallery'
-                  ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700'
+                  ? 'text-blue-600 border-b-blue-600'
+                  : 'text-gray-500 border-transparent hover:text-gray-700 bg-gray-50'
               }`}
             >
               Gallery
