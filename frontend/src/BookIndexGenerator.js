@@ -20,6 +20,8 @@ const BookIndexGenerator = () => {
   const [cameraLoading, setCameraLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('topics');
+  const [galleryImages, setGalleryImages] = useState({});
+  const [loadingImages, setLoadingImages] = useState(false);
 
   const importFileRef = useRef();
 
@@ -572,6 +574,47 @@ const checkCameraPermission = async () => {
     return `https://en.wikipedia.org/wiki/${encodeURIComponent(term.replace(/\s+/g, '_'))}`;
   };
 
+  const fetchWikipediaImages = async (topics) => {
+  const pageNum = selectedPage;
+  if (galleryImages[pageNum]) return; // Already loaded
+  
+  setLoadingImages(true);
+  const images = [];
+  
+  try {
+    for (const topic of topics.slice(0, 6)) { // Limit to 6 topics for performance
+      try {
+        const searchResponse = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic.replace(/\s+/g, '_'))}`
+        );
+        
+        if (searchResponse.ok) {
+          const data = await searchResponse.json();
+          if (data.thumbnail && data.thumbnail.source) {
+            images.push({
+              topic,
+              imageUrl: data.thumbnail.source,
+              title: data.title,
+              description: data.extract,
+              wikipediaUrl: generateWikipediaUrl(topic)
+            });
+          }
+        }
+      } catch (error) {
+        console.log(`Failed to fetch image for ${topic}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching Wikipedia images:', error);
+  }
+  
+  setGalleryImages(prev => ({
+    ...prev,
+    [pageNum]: images
+  }));
+  setLoadingImages(false);
+};
+
   const renderHome = () => (
     <div className="p-4">
       <div className="flex items-center justify-between mb-6">
@@ -1032,13 +1075,84 @@ const NotesTab = () => {
   );
 };
 
-  const GalleryTab = () => (
-    <div className="bg-white border-b min-h-64">
-      <div className="p-8 text-center text-gray-500">
-        <p>Gallery feature coming soon...</p>
+const GalleryTab = () => {
+  const images = galleryImages[selectedPage] || [];
+  
+  useEffect(() => {
+    if (pageTopics.length > 0 && !galleryImages[selectedPage]) {
+      fetchWikipediaImages(pageTopics);
+    }
+  }, [selectedPage, pageTopics]);
+
+  if (loadingImages) {
+    return (
+      <div className="bg-white border-b min-h-64">
+        <div className="p-8 text-center text-gray-500">
+          <div className="flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            <p>Loading images from Wikipedia...</p>
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  if (images.length === 0) {
+    return (
+      <div className="bg-white border-b min-h-64">
+        <div className="p-8 text-center text-gray-500">
+          <p>No images found for topics on this page</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border-b">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+        {images.map((item, index) => (
+          <a 
+            key={index}
+            href={item.wikipediaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+          >
+            <div className="aspect-w-16 aspect-h-9 bg-gray-100">
+              <img
+                src={item.imageUrl}
+                alt={item.title}
+                className="w-full h-48 object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+              <div 
+                className="hidden w-full h-48 bg-gray-100 items-center justify-center text-gray-500"
+              >
+                <span className="text-sm">Image not available</span>
+              </div>
+            </div>
+            <div className="p-3">
+              <h3 className="font-medium text-gray-900 text-sm mb-1 truncate">
+                {item.topic}
+              </h3>
+              {item.description && (
+                <p className="text-xs text-gray-600 line-clamp-2">
+                  {item.description.slice(0, 100)}...
+                </p>
+              )}
+            </div>
+          </a>
+        ))}
+      </div>
+      <p className="pb-4 text-xs text-center text-gray-500 bg-gray-50">
+        Images from Wikipedia - click to view full articles
+      </p>
     </div>
   );
+};
 
   return (
     <>
