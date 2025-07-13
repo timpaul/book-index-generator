@@ -18,6 +18,7 @@ const BookIndexGenerator = () => {
   const [importingBook, setImportingBook] = useState(null);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const importFileRef = useRef();
 
@@ -559,13 +560,13 @@ const checkCameraPermission = async () => {
           className="bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-600"
         >
           <Plus className="w-4 h-4" />
-          New Book
+          New book
         </button>
       </div>
 
       {showNewBookForm && (
-        <div className="bg-white p-4 rounded-lg border-2 border-blue-200 mb-6">
-          <h3 className="font-semibold mb-3">Create New Book</h3>
+        <div className="bg-white p-4 border-2 border-blue-200 mb-6">
+          <h3 className="font-semibold mb-3">Create new book</h3>
           <input
             type="text"
             placeholder="Book name (optional)"
@@ -578,7 +579,7 @@ const checkCameraPermission = async () => {
               onClick={createBook}
               className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
             >
-              Create Book
+              Create book
             </button>
             <button
               onClick={() => {
@@ -592,13 +593,13 @@ const checkCameraPermission = async () => {
           </div>
           
           <div className="border-t pt-4">
-            <h4 className="font-semibold mb-2">Or Import Book</h4>
+            <h4 className="font-semibold mb-2">Or import book</h4>
             <button
               onClick={() => importFileRef.current?.click()}
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
-              Import from JSON file
+              Import book from JSON file
             </button>
             <input
               ref={importFileRef}
@@ -658,7 +659,7 @@ const checkCameraPermission = async () => {
               Created on {new Date(book.createdAt).toLocaleDateString()}
             </p>
             <p className="text-gray-600 text-sm mb-3">
-              {Object.keys(book.entries).length} terms in {Object.keys(book.pages).length} pages from {book.photosProcessed} photos
+              {Object.keys(book.entries).length} topics in {Object.keys(book.pages).length} pages from {book.photosProcessed} photos
             </p>
             <button
               onClick={() => {
@@ -684,118 +685,78 @@ const checkCameraPermission = async () => {
     </div>
   );
 
-  const renderBook = () => {
-    const book = books[currentBookId];
-    if (!book) return null;
+const renderBook = () => {
+  const book = books[currentBookId];
+  if (!book) return null;
 
-    return (
-      <div className="">
-        <div className="flex items-center gap-2 mb-1 p-4">
-          <button
-            onClick={() => setView('home')}
-            className="text-blue-500 hover:text-blue-700"
-          >
-            <Home className="w-4 h-4" />
-          </button>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-          <h1 className="text-xl font-bold">{book.name}</h1>
-        </div>
+  // Filter pages based on search query
+  const filteredPages = Object.keys(book.pages).filter(pageNum => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Check if page number matches
+    if (pageNum.includes(query)) return true;
+    
+    // Check if any topic on this page matches
+    const pageTopics = book.pages[pageNum] || [];
+    return pageTopics.some(topic => 
+      topic.toLowerCase().includes(query)
+    );
+  });
 
-        <div className="bg-white p-4 border-t border-b mb-6">
-          <h2 className="font-semibold mb-3 flex items-center gap-2">
-            <Camera className="w-5 h-5" />
-            Add index photos
-          </h2>
+  return (
+    <div className="">
+      <div className="flex items-center gap-2 mb-1 p-4">
+        <button
+          onClick={() => setView('home')}
+          className="text-blue-500 hover:text-blue-700"
+        >
+          <Home className="w-4 h-4" />
+        </button>
+        <ChevronRight className="w-4 h-4 text-gray-400" />
+        <h1 className="text-xl font-bold">{book.name}</h1>
+      </div>
 
+ 
 
-          <p className="text-gray-600 text-sm mb-4">
-            {Object.keys(book.entries).length} terms in {Object.keys(book.pages).length} pages from {book.photosProcessed} photos
-          </p>
-          
-          {processing && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200">
-              <p className="text-blue-700">{processingStatus}</p>
+      {Object.keys(book.pages).length > 0 && (
+        <div className="mb-6">
+          {/* Search box */}
+          <div className="mx-4 mb-4">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by page number or topic..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              )}
             </div>
-          )}
 
-          {processingStatus && !processing && processingStatus.includes('Error') && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200">
-              <p className="text-red-700">{processingStatus}</p>
-            </div>
-          )}
+            <p className="text-gray-600 text-sm text-center mt-3">
+              {Object.keys(book.entries).length} topics in {Object.keys(book.pages).length} pages
+            </p>
 
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={startCamera}
-              disabled={processing || cameraActive || cameraLoading}
-              className="bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-600 disabled:opacity-50"
-            >
-              <Camera className="w-4 h-4" />
-              {cameraLoading ? 'Starting Camera...' : 'Take Photo'}
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={processing}
-              className="bg-blue-500 text-white px-4 py-2 flex items-center rounded gap-2 hover:bg-blue-600 disabled:opacity-50"
-            >
-              <Upload className="w-4 h-4" />
-              Upload Photos
-            </button>
           </div>
 
-          {(cameraActive || cameraLoading) && (
-            <div className="mb-4">
-              {cameraLoading && (
-                <div className="w-full max-w-md border bg-gray-100 flex items-center justify-center h-48">
-                  <p className="text-gray-600">Starting camera...</p>
-                </div>
-              )}
-              {cameraActive && (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full max-w-md border"
-                />
-              )}
-              <div className="flex gap-2 mt-2">
-                {cameraActive && (
-                  <button
-                    onClick={capturePhoto}
-                    className="bg-green-500 text-white px-4 py-2 hover:bg-green-600"
-                  >
-                    Capture
-                  </button>
-                )}
-                <button
-                  onClick={stopCamera}
-                  className="bg-gray-500 text-white px-4 py-2 hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
+          <div className="bg-white grid border-t md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredPages.length === 0 ? (
+              <div className="col-span-full p-8 text-center text-gray-500">
+                <Search className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No pages found matching "{searchQuery}"</p>
               </div>
-            </div>
-          )}
-
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            style={{ display: 'none' }}
-          />
-
-        </div>
-
-        {Object.keys(book.pages).length > 0 && (
-          <div className="border-b mb-6">
-            <h2 className="font-semibold m-4 flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Pages ({Object.keys(book.pages).length})
-            </h2>
-            <div className="bg-white grid border-t md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {Object.keys(book.pages)
+            ) : (
+              filteredPages
                 .map(Number)
                 .sort((a, b) => a - b)
                 .map(pageNum => (
@@ -814,30 +775,116 @@ const checkCameraPermission = async () => {
                       </span>
                     </div>
                   </button>
-                ))}
+                ))
+            )}
+          </div>
+        </div>
+      )}
+
+           <div className="bg-white p-4 border-t border-b mb-6">
+        <h2 className="font-semibold mb-3 flex items-center gap-2">
+          <Camera className="w-5 h-5" />
+          Add index photos
+        </h2>
+
+        <p className="text-gray-600 text-sm mb-4">
+          {Object.keys(book.entries).length} topics in {Object.keys(book.pages).length} pages from {book.photosProcessed} photos
+        </p>
+        
+        {processing && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200">
+            <p className="text-blue-700">{processingStatus}</p>
+          </div>
+        )}
+
+        {processingStatus && !processing && processingStatus.includes('Error') && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200">
+            <p className="text-red-700">{processingStatus}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={startCamera}
+            disabled={processing || cameraActive || cameraLoading}
+            className="bg-green-500 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-600 disabled:opacity-50"
+          >
+            <Camera className="w-4 h-4" />
+            {cameraLoading ? 'Starting Camera...' : 'Take Photo'}
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={processing}
+            className="bg-blue-500 text-white px-4 py-2 flex items-center rounded gap-2 hover:bg-blue-600 disabled:opacity-50"
+          >
+            <Upload className="w-4 h-4" />
+            Upload photos
+          </button>
+        </div>
+
+        {(cameraActive || cameraLoading) && (
+          <div className="mb-4">
+            {cameraLoading && (
+              <div className="w-full max-w-md border bg-gray-100 flex items-center justify-center h-48">
+                <p className="text-gray-600">Starting camera...</p>
+              </div>
+            )}
+            {cameraActive && (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full max-w-md border"
+              />
+            )}
+            <div className="flex gap-2 mt-2">
+              {cameraActive && (
+                <button
+                  onClick={capturePhoto}
+                  className="bg-green-500 text-white px-4 py-2 hover:bg-green-600"
+                >
+                  Capture
+                </button>
+              )}
+              <button
+                onClick={stopCamera}
+                className="bg-gray-500 text-white px-4 py-2 hover:bg-gray-600"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
 
-        <div className="bg-white p-4 rounded-lg border">
-          <h2 className="font-semibold mb-3 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Export Book
-          </h2>
-          <p className="text-gray-600 text-sm mb-3">
-            Export this book's data as a JSON file to share or backup your index data.
-          </p>
-          <button
-            onClick={() => exportBook(currentBookId)}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2"
-          >
-            <FileText className="w-4 h-4" />
-            Export Book Data
-          </button>
-        </div>
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileUpload}
+          style={{ display: 'none' }}
+        />
       </div>
-    );
-  };
+
+      <div className="bg-white p-4 border-t">
+        <h2 className="font-semibold mb-3 flex items-center gap-2">
+          <FileText className="w-5 h-5" />
+          Export book
+        </h2>
+        <p className="text-gray-600 text-sm mb-3">
+          Export this book's data as a JSON file to share or backup your index data.
+        </p>
+        <button
+          onClick={() => exportBook(currentBookId)}
+          className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2"
+        >
+          <FileText className="w-4 h-4" />
+          Export Book Data
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Option 1: Move PageNavigation outside the content area and make it fixed
 const renderPage = () => {
