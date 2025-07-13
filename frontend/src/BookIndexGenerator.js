@@ -19,6 +19,7 @@ const BookIndexGenerator = () => {
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('topics');
 
   const importFileRef = useRef();
 
@@ -84,6 +85,27 @@ const BookIndexGenerator = () => {
       window.scrollTo(0, 0);
     }
   }, [view, selectedPage]);
+
+  // Load active tab from localStorage
+useEffect(() => {
+  try {
+    const savedTab = localStorage.getItem('book-index-generator-active-tab');
+    if (savedTab && ['topics', 'notes', 'gallery'].includes(savedTab)) {
+      setActiveTab(savedTab);
+    }
+  } catch (error) {
+    console.error('Error loading active tab from localStorage:', error);
+  }
+}, []);
+
+// Save active tab to localStorage
+useEffect(() => {
+  try {
+    localStorage.setItem('book-index-generator-active-tab', activeTab);
+  } catch (error) {
+    console.error('Error saving active tab to localStorage:', error);
+  }
+}, [activeTab]);
 
   // Updated OCR function to use backend API
   const claudeOCR = async (imageData) => {
@@ -888,103 +910,155 @@ const renderBook = () => {
   );
 };
 
-// Option 1: Move PageNavigation outside the content area and make it fixed
 const renderPage = () => {
-    const book = books[currentBookId];
-    if (!book || !selectedPage) return null;
+  const book = books[currentBookId];
+  if (!book || !selectedPage) return null;
 
-    const pageTopics = book.pages[selectedPage] || [];
-    const allPageNumbers = Object.keys(book.pages).map(Number).sort((a, b) => a - b);
-    const currentPageIndex = allPageNumbers.indexOf(selectedPage);
-    const previousPage = currentPageIndex > 0 ? allPageNumbers[currentPageIndex - 1] : null;
-    const nextPage = currentPageIndex < allPageNumbers.length - 1 ? allPageNumbers[currentPageIndex + 1] : null;
+  const pageTopics = book.pages[selectedPage] || [];
+  const allPageNumbers = Object.keys(book.pages).map(Number).sort((a, b) => a - b);
+  const currentPageIndex = allPageNumbers.indexOf(selectedPage);
+  const previousPage = currentPageIndex > 0 ? allPageNumbers[currentPageIndex - 1] : null;
+  const nextPage = currentPageIndex < allPageNumbers.length - 1 ? allPageNumbers[currentPageIndex + 1] : null;
 
-    const PageNavigation = () => (
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-        <div className="flex justify-between items-center py-3 max-w-4xl mx-auto">
-          <div>
-            {previousPage && (
-              <button
-                onClick={() => setSelectedPage(previousPage)}
-                className="text-blue-500 font-bold hover:text-blue-700 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-blue-50"
-              >
-                <ChevronRight className="w-4 h-4 rotate-180" />
-                Prev
-              </button>
-            )}
-          </div>
-          <div className="text-sm text-gray-600 font-medium">
-            Page {selectedPage} of {allPageNumbers.length}
-          </div>
-          <div>
-            {nextPage && (
-              <button
-                onClick={() => setSelectedPage(nextPage)}
-                className="text-blue-500 font-bold hover:text-blue-700 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-blue-50"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+  const PageNavigation = () => (
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+      <div className="flex justify-between items-center py-3 max-w-4xl mx-auto">
+        <div>
+          {previousPage && (
+            <button
+              onClick={() => setSelectedPage(previousPage)}
+              className="text-blue-500 font-bold hover:text-blue-700 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-blue-50"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" />
+              Prev
+            </button>
+          )}
+        </div>
+        <div className="text-sm text-gray-600 font-medium">
+          Page {selectedPage} of {allPageNumbers.length}
+        </div>
+        <div>
+          {nextPage && (
+            <button
+              onClick={() => setSelectedPage(nextPage)}
+              className="text-blue-500 font-bold hover:text-blue-700 flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-blue-50"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
-    );
+    </div>
+  );
 
-    return (
-      <>
-        <div className="pb-20"> {/* Add bottom padding to prevent content from being hidden behind fixed nav */}
-          <div className="flex items-center gap-2 p-4 mb-1">
-            <button
-              onClick={() => setView('home')}
-              className="text-blue-500 hover:text-blue-700"
+  const TopicsTab = () => (
+    <div className="bg-white border-t border-b">
+
+          {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
+            <a
+              key={topic}
+              href={generateWikipediaUrl(topic)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block p-4 border-b hover:bg-blue-50 transition-colors"
             >
-              <Home className="w-4 h-4" />
-            </button>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <button
-              onClick={() => setView('book')}
-              className="text-blue-500 hover:text-blue-700"
-            >
-              {book.name}
-            </button>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <h1 className="text-l font-bold">Page {selectedPage}</h1>
-          </div>
-
-          <div className="bg-white border-t border-b">
-            {pageTopics.length === 0 ? (
-              <p className="text-gray-500 text-center p-8">No topics found for this page.</p>
-            ) : (
-              <div>
-
-
-
-                {pageTopics.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).map(topic => (
-                  <a
-                    key={topic}
-                    href={generateWikipediaUrl(topic)}
-                    className="block p-4 border-b hover:bg-blue-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-800 hover:text-gray-900">{topic}</span>
-                      <div className="bg-blue-500 rounded-full p-1 flex items-center justify-center w-6 h-6">
-                        <ChevronRight className="w-3 h-3 text-white" />
-                      </div>
-                    </div>
-                  </a>
-                ))}
-
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-800 hover:text-gray-900">{topic}</span>
+                <div className="bg-blue-500 rounded-full p-1 flex items-center justify-center w-6 h-6">
+                  <ChevronRight className="w-3 h-3 text-white" />
+                </div>
               </div>
-            )}
+            </a>
+          ))}
+    </div>
+  );
+
+  const NotesTab = () => (
+    <div className="bg-white border-t border-b min-h-64">
+      <div className="p-8 text-center text-gray-500">
+        <p>Notes feature coming soon...</p>
+      </div>
+    </div>
+  );
+
+  const GalleryTab = () => (
+    <div className="bg-white border-t border-b min-h-64">
+      <div className="p-8 text-center text-gray-500">
+        <p>Gallery feature coming soon...</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="pb-20">
+        {/* Header */}
+        <div className="flex items-center gap-2 p-4 mb-1">
+          <button
+            onClick={() => setView('home')}
+            className="text-blue-500 hover:text-blue-700"
+          >
+            <Home className="w-4 h-4" />
+          </button>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+          <button
+            onClick={() => setView('book')}
+            className="text-blue-500 hover:text-blue-700"
+          >
+            {book.name}
+          </button>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+          <h1 className="text-l font-bold">Page {selectedPage}</h1>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white border-b">
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab('topics')}
+              className={`flex-1 py-3 font-medium border-b-2 transition-colors ${
+                activeTab === 'topics'
+                  ? 'text-blue-600 border-blue-600'
+                  : 'text-gray-500 border-transparent hover:text-gray-700'
+              }`}
+            >
+              Topics
+            </button>
+            <button
+              onClick={() => setActiveTab('notes')}
+              className={`flex-1 py-3 font-medium border-b-2 transition-colors ${
+                activeTab === 'notes'
+                  ? 'text-blue-600 border-blue-600'
+                  : 'text-gray-500 border-transparent hover:text-gray-700'
+              }`}
+            >
+              Notes
+            </button>
+            <button
+              onClick={() => setActiveTab('gallery')}
+              className={`flex-1 py-3 font-medium border-b-2 transition-colors ${
+                activeTab === 'gallery'
+                  ? 'text-blue-600 border-blue-600'
+                  : 'text-gray-500 border-transparent hover:text-gray-700'
+              }`}
+            >
+              Gallery
+            </button>
           </div>
         </div>
-        
-        {/* Fixed navigation at bottom */}
-        <PageNavigation />
-      </>
-    );
-  };
+
+        {/* Tab Content */}
+        {activeTab === 'topics' && <TopicsTab />}
+        {activeTab === 'notes' && <NotesTab />}
+        {activeTab === 'gallery' && <GalleryTab />}
+      </div>
+      
+      {/* Fixed navigation at bottom */}
+      <PageNavigation />
+    </>
+  );
+};
 
   return (
     <div className="min-h-screen bg-gray-50">
